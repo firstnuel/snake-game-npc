@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Snake Game - Join</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐍</text></svg>">
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="css/welcome.css">
+</head>
+<body>
+    <div class="join-container">
+        <h1>🐍 Multiplayer Snake Game</h1>
+        
+        <div class="join-form" id="joinForm">
+            <div class="form-group">
+                <label>Game Mode:</label>
+                <div class="mode-toggle">
+                    <label class="mode-option">
+                        <input type="radio" name="gameMode" value="multi-player">
+                        <span>Multi-Player</span>
+                    </label>
+                    <label class="mode-option">
+                        <input type="radio" name="gameMode" value="single-player" checked>
+                        <span>Single-Player (vs NPCs)</span>
+                    </label>
+                    <label class="mode-option">
+                        <input type="radio" name="gameMode" value="solo">
+                        <span>Solo (No NPCs)</span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="form-group" id="multiPlayerFields">
+                <label for="playerName">Your Name:</label>
+                <input type="text" id="playerName" placeholder="Enter your name" maxlength="20" required>
+                <span class="error" id="nameError"></span>
+            </div>
+
+            <div class="form-group" id="controlSchemeFields">
+                <label>Control Scheme:</label>
+                <div class="control-scheme-toggle">
+                    <label class="control-option">
+                        <input type="radio" name="controlScheme" value="wasd" checked>
+                        <span>WASD (W/A/S/D)</span>
+                    </label>
+                    <label class="control-option">
+                        <input type="radio" name="controlScheme" value="arrows">
+                        <span>Arrow Keys</span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="form-group" id="multiPlayerFields2">
+                <label for="roomCode">Room Code:</label>
+                <div class="room-code-input">
+                    <input type="text" id="roomCode" placeholder="Enter or create room code" maxlength="10" required>
+                    <button type="button" id="generateRoomCode" class="btn-secondary">Generate</button>
+                </div>
+            </div>
+
+            <div class="form-group" id="singlePlayerFields" style="display: none;">
+                <label for="singlePlayerName">Your Name:</label>
+                <input type="text" id="singlePlayerName" placeholder="Enter your name" maxlength="20" value="Player">
+            </div>
+
+            <div class="form-group" id="singlePlayerFields2" style="display: none;">
+                <label for="npcCount">Number of NPCs:</label>
+                <select id="npcCount">
+                    <option value="1">1 NPC (Easy)</option>
+                    <option value="2" selected>2 NPCs (Medium)</option>
+                    <option value="3">3 NPCs (Hard)</option>
+                </select>
+            </div>
+
+            <div class="form-group" id="singlePlayerGameOptions" style="display: none; margin-top: 15px; padding: 15px; background: #f5f5f5; border-radius: 8px;">
+                <h3 style="margin-top: 0; margin-bottom: 15px; color: #667eea; font-size: 1em;">Game Options</h3>
+                
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label style="display: flex; align-items: center; cursor: pointer;">
+                        <input type="checkbox" id="singlePlayerWallModeToggle" style="margin-right: 8px; width: 18px; height: 18px;">
+                        <span>Wall Mode (Snakes die on wall collision instead of wrapping)</span>
+                    </label>
+                </div>
+            </div>
+
+            <button type="button" id="joinButton" class="btn-primary">Start Single-Player Game</button>
+            
+            <div class="server-config" style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #ddd;">
+                <details style="cursor: pointer;">
+                    <summary style="color: #666; font-size: 0.9em; user-select: none;">⚙️ Server Configuration (Advanced)</summary>
+                    <div style="margin-top: 10px; padding: 10px; background: #f5f5f5; border-radius: 5px; margin-bottom: 10px;">
+                        <div style="font-size: 0.85em; color: #666; margin-bottom: 5px;">Current Server:</div>
+                        <div id="currentServerUrl" style="font-size: 0.9em; color: #333; font-weight: 600; word-break: break-all;">Loading...</div>
+                    </div>
+                    <div id="networkIPsDisplay" style="margin-top: 10px; padding: 10px; background: #e8f4f8; border-radius: 5px; border: 1px solid #bee5eb; display: none; font-size: 0.85em;"></div>
+                    <div class="form-group" style="margin-top: 10px;">
+                        <label for="serverUrl">Server URL:</label>
+                        <input type="text" id="serverUrl" placeholder="Leave empty to use current server" style="width: 100%; padding: 8px; margin-top: 5px;">
+                        <p style="font-size: 0.85em; color: #666; margin-top: 5px;">
+                            For same WiFi: Use your computer's IP (e.g., http://192.168.1.100:3000)<br>
+                            For internet: Use public URL (e.g., https://your-app.railway.app)
+                        </p>
+                        <button type="button" id="saveServerUrl" class="btn-secondary" style="margin-top: 5px;">Save & Reconnect</button>
+                        <button type="button" id="clearServerUrl" class="btn-secondary" style="margin-top: 5px; margin-left: 5px;">Reset to Default</button>
+                    </div>
+                </details>
+            </div>
+        </div>
+
+        <div class="public-rooms" id="publicRoomsSection">
+            <h3>Public Rooms</h3>
+            <div id="publicRoomsList" class="public-rooms-list"></div>
+        </div>
+
+        <div class="session-history" id="sessionHistory">
+            <h3>Recent Matches</h3>
+            <ul id="sessionHistoryList"></ul>
+        </div>
+        <div class="game-warning" id="gameWarning">
+            <strong>Important:</strong> Do not refresh the page during the game. Refreshing will immediately end your game session.
+        </div>
+
+        <div class="waiting-room" id="waitingRoom" style="display: none;">
+            <h2>Waiting Room</h2>
+            <div class="room-info">
+                <p>Room Code: <strong id="displayRoomCode"></strong> <button type="button" id="copyDisplayRoomCode" class="btn-copy" title="Copy room code" style="display: none;">Copy</button></p>
+                <p>Share this code with other players!</p>
+            </div>
+
+            <div class="players-list">
+                <h3>Players (<span id="playerCount">0</span>/4)</h3>
+                <ul id="playersList"></ul>
+            </div>
+
+            <div class="host-controls" id="hostControls" style="display: none;">
+                <div class="public-toggle" id="publicToggleWrapper" style="display: none;">
+                    <button type="button" id="publicRoomToggle" class="btn-secondary">Make Room Public</button>
+                    <span id="publicRoomStatusPill" class="pill pill-private">Private</span>
+                </div>
+
+                <div class="game-settings" id="gameSettings" style="margin-bottom: 20px; padding: 15px; background: #f5f5f5; border-radius: 8px;">
+                    <h3 style="margin-top: 0; margin-bottom: 15px; color: #667eea;">Game Settings</h3>
+                    
+                    <div class="form-group" style="margin-bottom: 15px;">
+                        <label style="display: flex; align-items: center; cursor: pointer;">
+                            <input type="checkbox" id="wallModeToggle" style="margin-right: 8px; width: 18px; height: 18px;">
+                            <span>Wall Mode (Snakes die on wall collision instead of wrapping)</span>
+                        </label>
+                    </div>
+                    
+                    <div class="form-group" style="margin-bottom: 15px;">
+                        <label style="display: flex; align-items: center; cursor: pointer;">
+                            <input type="checkbox" id="strictModeToggle" style="margin-right: 8px; width: 18px; height: 18px;">
+                            <span>Strict Mode (All snake body collisions are fatal)</span>
+                        </label>
+                    </div>
+                    
+                    <div class="form-group" style="margin-bottom: 15px;">
+                        <label for="timeLimitSelect" style="display: block; margin-bottom: 5px;">Time Limit:</label>
+                        <select id="timeLimitSelect" style="width: 100%; padding: 8px; border-radius: 5px; border: 1px solid #ddd;">
+                            <option value="">None</option>
+                            <option value="3">3 minutes</option>
+                            <option value="5">5 minutes</option>
+                            <option value="10">10 minutes</option>
+                            <option value="15">15 minutes</option>
+                        </select>
+                    </div>
+                    
+                    <div class="current-settings" id="currentSettings" style="margin-top: 10px; padding: 10px; background: white; border-radius: 5px; font-size: 0.9em; color: #666;">
+                        <strong>Current Settings:</strong><br>
+                        <span id="wallModeStatus">Wall Mode: OFF (Wrapping)</span><br>
+                        <span id="strictModeStatus" style="display: none;">Strict Mode: ON ⚠️</span><br>
+                        <span id="timeLimitStatus">Time Limit: None</span>
+                    </div>
+                    
+                    <div id="strictModeInfo" style="display: none; margin-top: 10px; padding: 10px; background: #fff3cd; border-radius: 5px; font-size: 0.9em; color: #856404; border: 1px solid #ffc107;">
+                        <strong>⚠️ Strict Mode:</strong> Players cannot walk over any snake body. All collisions are fatal.
+                    </div>
+                </div>
+                
+                <button id="startGameButton" class="btn-primary" disabled>Start Game</button>
+                <p class="info-text">Need at least 2 players to start</p>
+            </div>
+
+            <button id="leaveRoomButton" class="btn-secondary">Leave Room</button>
+            
+            <!-- Countdown overlay for game start -->
+            <div class="game-overlay" id="waitingRoomCountdown" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.8); z-index: 1000; justify-content: center; align-items: center; flex-direction: column;">
+                <div class="overlay-content" style="text-align: center; color: white;">
+                    <h2 id="countdownTitle" style="font-size: 3em; font-weight: bold; margin-bottom: 20px;">Get Ready!</h2>
+                    <p id="countdownMessage" style="font-size: 2em; margin: 0;">Game starting in 5...</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="error-message" id="errorMessage" style="display: none;"></div>
+    </div>
+
+    <!-- Welcome Overlay (First Visit Only) -->
+    <div id="welcome-overlay" class="hidden">
+        <div class="welcome-content">
+            <h1 class="welcome-title">Welcome to Snake Game</h1>
+            
+            <div id="snake-overlay"></div>
+            
+            <p class="welcome-description">
+                Guide your snake, eat fruit, and grow! Compete with others in this classic multiplayer experience.
+            </p>
+            
+            <div class="welcome-button-container">
+                <button class="welcome-button">
+                    <span>▶</span> Start Playing
+                </button>
+                <button class="sound-toggle-btn" aria-label="Toggle sound"></button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="js/client.js"></script>
+    <script src="js/join.js"></script>
+    <script src="js/welcome.js"></script>
+</body>
+</html>

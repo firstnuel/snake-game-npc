@@ -1,0 +1,25 @@
+{
+  "name": "multiplayer-snake-game-server",
+  "version": "1.0.0",
+  "description": "Multiplayer Snake Game Server",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js --enable-powerups",
+    "dev": "nodemon index.js --enable-chat --enable-powerups --enable-accessibility",
+    "chat": "node index.js --enable-chat",
+    "powerups": "node index.js --enable-powerups",
+    "accessibility": "node index.js --enable-accessibility",
+    "all": "node index.js --enable-chat --enable-powerups --enable-accessibility"
+  },
+  "keywords": ["game", "multiplayer", "snake"],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.18.2",
+    "socket.io": "^4.6.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}
+

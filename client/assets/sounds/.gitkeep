@@ -1,0 +1,3 @@
+# Sound files directory
+# Place sound effect files here (optional - game uses Web Audio API fallback if files not found)
+

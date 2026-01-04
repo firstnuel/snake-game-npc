@@ -1,0 +1,16 @@
+{
+  "name": "multiplayer-snake-game",
+  "version": "1.0.0",
+  "description": "Multiplayer Snake Game",
+  "private": true,
+  "scripts": {
+    "lint": "eslint server/**/*.js client/**/*.js",
+    "lint:fix": "eslint server/**/*.js client/**/*.js --fix",
+    "lint:server": "eslint server/**/*.js",
+    "lint:client": "eslint client/**/*.js"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.0"
+  }
+}
+

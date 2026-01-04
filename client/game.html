@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Snake Game</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐍</text></svg>">
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="css/game.css">
+    <link rel="stylesheet" href="css/accessibility.css">
+</head>
+<body class="game-page">
+    <div class="game-container">
+        <div class="game-header">
+            <div class="score-board">
+                <h2>Scores</h2>
+                <div id="scoresList"></div>
+            </div>
+            <div class="header-stats">
+                <div class="level">
+                    <span>Level: </span><span id="levelDisplay">1</span>
+                </div>
+                <!-- Countdown timer box (separate from full overlay) -->
+                <div class="countdown-timer-box" id="countdownTimerBox" style="display: none;">
+                    <div class="countdown-timer-content">
+                        <div class="countdown-timer-number" id="countdownTimerNumber">5</div>
+                        <div class="countdown-timer-label" id="countdownTimerLabel">Get Ready!</div>
+                    </div>
+                </div>
+            </div>
+            <div class="timer-container">
+                <div class="timer">
+                    <span>Time: </span><span id="timerDisplay">00:00:00</span>
+                </div>
+                <div class="header-controls" style="display: flex; gap: 8px; margin-top: 8px; align-items: center;">
+                    <button id="soundToggleButton" class="btn-sound-toggle" title="Toggle Sound" style="display: none; padding: 8px 12px; font-size: 1.2em; background: white; border: 2px solid #667eea; border-radius: 8px; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: all 0.2s; min-width: 44px; min-height: 44px; align-items: center; justify-content: center;">
+                        <span id="soundToggleIcon">🔊</span>
+                    </button>
+                    <button id="leaveGameButton" class="btn-secondary btn-leave-game" style="display: none; padding: 6px 12px; font-size: 0.9em;">Leave Game</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="game-board-container">
+            <div id="gameBoard" class="game-board"></div>
+            <!-- Pre-game rules screen overlay -->
+            <div class="rules-screen-overlay" id="rulesScreenOverlay" style="display: none;">
+                <div class="rules-screen-content">
+                    <h2>How to Play</h2>
+                    <div class="rules-section">
+                        <h3>Game Rules</h3>
+                        <ul>
+                            <li>Use WASD or Arrow keys to control your snake</li>
+                            <li>Eat food (red circles) to grow and increase your score</li>
+                            <li>Avoid hitting walls or colliding with other snakes</li>
+                            <li>Speed increases as you level up</li>
+                            <li>Level increases every 5 food items eaten</li>
+                        </ul>
+                    </div>
+                    <div class="rules-section" id="powerupsRulesSection">
+                        <h3>Power-ups</h3>
+                        <ul class="powerups-list">
+                            <li>
+                                <span class="powerup-icon-large">⚡</span>
+                                <div>
+                                    <strong>Speed Boost:</strong> Increases your speed temporarily
+                                </div>
+                            </li>
+                            <li>
+                                <span class="powerup-icon-large">🛡️</span>
+                                <div>
+                                    <strong>Shield:</strong> Protects from collisions
+                                </div>
+                            </li>
+                            <li>
+                                <span class="powerup-icon-large">📉</span>
+                                <div>
+                                    <strong>Shrink:</strong> Makes your snake shorter
+                                </div>
+                            </li>
+                            <li>
+                                <span class="powerup-icon-large">🐌</span>
+                                <div>
+                                    <strong>Slow Others:</strong> Slows down opponents
+                                </div>
+                            </li>
+                        </ul>
+                    </div>
+                    <!-- Game mode settings -->
+                    <div class="game-settings-section" id="gameSettingsSection" style="display: none;">
+                        <h3>Game Settings</h3>
+                        <div id="gameSettingsList" class="game-settings-list"></div>
+                    </div>
+                    <!-- Multiplayer ready status -->
+                    <div class="ready-status-section" id="readyStatusSection" style="display: none;">
+                        <h3>Player Status</h3>
+                        <div id="readyStatusList"></div>
+                    </div>
+                    <div class="rules-screen-buttons">
+                        <button id="readyButton" class="btn-primary btn-ready">Ready</button>
+                    </div>
+                </div>
+            </div>
+            <div class="game-overlay" id="gameOverlay" style="display: none;">
+                <div class="overlay-content">
+                    <h2 id="overlayTitle"></h2>
+                    <p id="overlayMessage"></p>
+                    <div class="overlay-buttons" style="display: flex; gap: 10px; justify-content: center; margin-top: 20px;">
+                        <button id="overlayButton" class="btn-primary" style="display: none;">OK</button>
+                        <button id="playAgainButton" class="btn-primary" style="display: none;">Play Again</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="controls-instructions" id="controlsInstructions">
+            <h3>Your Controls</h3>
+            <div class="control-schemes" id="playerControls">
+                <div class="control-scheme">
+                    <strong id="controlSchemeDisplay">WASD</strong>
+                </div>
+            </div>
+            <p class="menu-hint">Press <kbd>ESC</kbd> to pause and open menu</p>
+        </div>
+
+
+        <div class="game-menu" id="gameMenu" style="display: none;">
+            <div class="menu-content">
+                <h2>Game Menu</h2>
+                <p id="menuStatus"></p>
+                <p id="menuHint" class="menu-hint"></p>
+                <div class="menu-buttons">
+                    <button id="pauseButton" class="btn-primary" style="display: none;">Pause</button>
+                    <button id="resumeButton" class="btn-primary">Play</button>
+                    <button id="quitButton" class="btn-secondary">Quit Game</button>
+                </div>
+                <div class="game-info" id="gameInfo">
+                    <h3>Game Information</h3>
+                    <div class="info-section">
+                        <h4>How to Play</h4>
+                        <ul>
+                            <li>Use WASD or Arrow keys to control your snake</li>
+                            <li>Eat food to grow and increase your score</li>
+                            <li>Avoid hitting walls or other snakes</li>
+                            <li>Speed increases as you level up</li>
+                        </ul>
+                    </div>
+                    <div class="info-section">
+                        <h4>Level System</h4>
+                        <ul>
+                            <li>Level increases every 5 food items eaten</li>
+                            <li>Speed increases with each level</li>
+                            <li>Current Level: <span id="menuLevelDisplay">1</span></li>
+                        </ul>
+                    </div>
+                    <div class="info-section" id="powerupsInfo" style="display: none;">
+                        <h4>Power-ups</h4>
+                        <ul>
+                            <li><strong>Speed Boost:</strong> Increases your speed temporarily</li>
+                            <li><strong>Shield:</strong> Protects from collisions</li>
+                            <li><strong>Shrink:</strong> Makes your snake shorter</li>
+                            <li><strong>Slow Others:</strong> Slows down opponents</li>
+                        </ul>
+                    </div>
+                    <div class="info-section">
+                        <h4>Controls</h4>
+                        <p>Current Control Scheme: <strong id="menuControlScheme">WASD</strong></p>
+                    </div>
+                    <div class="info-section" id="playerColorsInfo">
+                        <h4>Players & Colors</h4>
+                        <div id="playerColorsList"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="fps-counter" id="fpsCounter">FPS: --</div>
+    </div>
+
+    <!-- Mobile floating arrow controls -->
+    <div class="mobile-controls" id="mobileControls">
+      <div class="arrow-controls">
+        <button class="arrow-btn arrow-up" data-direction="up" aria-label="Move Up">↑</button>
+        <div class="arrow-row">
+          <button class="arrow-btn arrow-left" data-direction="left" aria-label="Move Left">←</button>
+          <button class="arrow-btn arrow-right" data-direction="right" aria-label="Move Right">→</button>
+        </div>
+        <button class="arrow-btn arrow-down" data-direction="down" aria-label="Move Down">↓</button>
+      </div>
+    </div>
+
+    <!-- Landscape fullscreen controls -->
+    <div class="landscape-controls" id="landscapeControls">
+      <div class="arrow-controls-landscape">
+        <button class="arrow-btn-landscape arrow-up-landscape" data-direction="up" aria-label="Move Up">↑</button>
+        <div class="arrow-row-landscape">
+          <button class="arrow-btn-landscape arrow-left-landscape" data-direction="left" aria-label="Move Left">←</button>
+          <button class="arrow-btn-landscape arrow-right-landscape" data-direction="right" aria-label="Move Right">→</button>
+        </div>
+        <button class="arrow-btn-landscape arrow-down-landscape" data-direction="down" aria-label="Move Down">↓</button>
+      </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="js/client.js"></script>
+    <script src="js/input.js"></script>
+    <script src="js/menu.js"></script>
+    <script src="js/audio.js"></script>
+    <script src="js/chat.js"></script>
+    <script src="js/powerups.js"></script>
+    <script src="js/accessibility.js"></script>
+    <script src="js/game.js"></script>
+</body>
+</html>

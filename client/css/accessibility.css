@@ -1,0 +1,126 @@
+/* Accessibility styles */
+.accessibility-panel {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: white;
+  border-radius: 10px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+  z-index: 3000;
+  max-width: 400px;
+  width: 90%;
+  display: none;
+}
+
+.accessibility-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px 20px;
+  background: #667eea;
+  color: white;
+  border-radius: 10px 10px 0 0;
+}
+
+.accessibility-header h3 {
+  margin: 0;
+  font-size: 1.2em;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 0;
+  width: 30px;
+  height: 30px;
+  line-height: 30px;
+}
+
+.accessibility-content {
+  padding: 20px;
+}
+
+.setting-group {
+  margin-bottom: 20px;
+}
+
+.setting-group label {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-weight: 600;
+  color: #333;
+}
+
+.setting-group input[type="checkbox"] {
+  width: auto;
+  margin-right: 10px;
+}
+
+.setting-group select {
+  padding: 8px;
+  border: 2px solid #e0e0e0;
+  border-radius: 5px;
+  font-size: 14px;
+}
+
+.accessibility-btn {
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  padding: 7px 10.5px;
+  background: #667eea;
+  color: white;
+  border: none;
+  border-radius: 3.5px;
+  cursor: pointer;
+  font-size: 11px;
+  z-index: 2000;
+  box-shadow: 0 2.8px 4.2px rgba(0, 0, 0, 0.2);
+}
+
+.accessibility-btn:hover {
+  background: #5568d3;
+}
+
+/* High contrast mode */
+.high-contrast {
+  filter: contrast(1.2);
+}
+
+.high-contrast .cell {
+  border: 1px solid #000;
+}
+
+.high-contrast .snake-head,
+.high-contrast .snake-body {
+  border: 2px solid #000;
+}
+
+/* Screen reader only */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* ARIA improvements */
+[role="grid"] {
+  outline: none;
+}
+
+[role="grid"]:focus {
+  outline: 2px solid #667eea;
+  outline-offset: 2px;
+}
+
