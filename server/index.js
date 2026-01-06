@@ -68,6 +68,7 @@ const featureFlags = {
   powerups: process.argv.includes('--enable-powerups') || process.env.ENABLE_POWERUPS === 'true',
   accessibility: !process.argv.includes('--disable-accessibility') && process.env.ENABLE_ACCESSIBILITY !== 'false'
 };
+const allowSoloMode = process.env.ENABLE_SOLO_MODE === 'true';
 
 function createPlayerId() {
   return `player-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -581,8 +582,8 @@ io.on('connection', (socket) => {
       }
     }
 
-    // Check if room is in single-player mode
-    if (room.gameMode === 'single-player') {
+    // Check if room is in single-player or solo mode
+    if (room.gameMode === 'single-player' || room.gameMode === 'solo') {
       socket.emit('joinError', { message: 'Room is in single-player mode' });
       return;
     }
@@ -808,6 +809,7 @@ io.on('connection', (socket) => {
     const { playerName, npcCount, gameOptions, gameMode } = data;
     const playerToken = data.playerToken || createPlayerId();
     const controlScheme = data.controlScheme || 'wasd';
+    const parsedNpcCount = Number(npcCount);
     
     if (!playerName || playerName.trim().length === 0) {
       devLog.error('startSinglePlayer: Player name is required');
@@ -815,15 +817,15 @@ io.on('connection', (socket) => {
       return;
     }
 
-    // Allow npcCount to be 0 for solo mode
-    if (npcCount < 0 || npcCount > 3) {
+    const minNpcCount = allowSoloMode ? 0 : 1;
+    if (!Number.isFinite(parsedNpcCount) || parsedNpcCount < minNpcCount || parsedNpcCount > 3) {
       devLog.error('startSinglePlayer: Invalid NPC count:', npcCount);
-      socket.emit('error', { message: 'NPC count must be between 0 and 3' });
+      socket.emit('error', { message: `NPC count must be between ${minNpcCount} and 3` });
       return;
     }
 
-    // Determine game mode: solo if npcCount is 0 or gameMode is 'solo', otherwise single-player
-    const actualGameMode = (npcCount === 0 || gameMode === 'solo') ? 'solo' : 'single-player';
+    // Determine game mode: solo only when explicitly enabled
+    const actualGameMode = allowSoloMode && (parsedNpcCount === 0 || gameMode === 'solo') ? 'solo' : 'single-player';
 
     // Create a unique room code for single-player
     const roomCode = 'SP' + Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -854,6 +856,16 @@ io.on('connection', (socket) => {
       publicCreatedAt: null
     };
 
+    const npcConfigInput = Array.isArray(data.npcConfigs) ? data.npcConfigs : [];
+    const npcConfigList = [];
+    for (let i = 0; i < parsedNpcCount; i++) {
+      const fallbackName = ['Bot-Alpha', 'Bot-Beta', 'Bot-Gamma'][i] || `Bot-${i + 1}`;
+      const normalizedConfig = typeof npcAI.normalizeNPCConfig === 'function'
+        ? npcAI.normalizeNPCConfig(npcConfigInput[i], fallbackName)
+        : { name: fallbackName, profile: 'balanced', difficulty: 'medium', tuning: { speed: 3, skill: 3, boldness: 3 } };
+      npcConfigList.push(normalizedConfig);
+    }
+
     // Add human player
     const playerId = createPlayerId();
     room.players.set(playerId, {
@@ -871,14 +883,11 @@ io.on('connection', (socket) => {
     mapSocketToPlayer(room, socket.id, playerId);
 
     // Create NPCs only if not solo mode
-    if (actualGameMode === 'single-player' && npcCount > 0) {
-      const npcNames = ['Bot-Alpha', 'Bot-Beta', 'Bot-Gamma'];
-      const difficulties = ['easy', 'medium', 'hard'];
-      
-      for (let i = 0; i < npcCount; i++) {
+    if (actualGameMode === 'single-player' && parsedNpcCount > 0) {
+      for (let i = 0; i < parsedNpcCount; i++) {
+        const npcConfig = npcConfigList[i] || { name: `Bot-${i + 1}`, profile: 'balanced', difficulty: 'medium', tuning: { speed: 3, skill: 3, boldness: 3 } };
         const npcId = `npc-${roomCode}-${i}`;
-        const npcName = npcNames[i];
-        const difficulty = difficulties[i] || 'medium';
+        const npcName = npcConfig.name;
         
         room.players.set(npcId, {
           id: npcId,
@@ -889,7 +898,7 @@ io.on('connection', (socket) => {
         });
 
         // Create NPC AI instance
-        const npc = npcAI.createNPC(npcId, npcName, difficulty);
+        const npc = npcAI.createNPC(npcId, npcName, npcConfig);
         room.npcs.set(npcId, npc);
       }
     }
@@ -936,7 +945,7 @@ io.on('connection', (socket) => {
       gameMode: actualGameMode,
       playerCount: playersArray.length,
       players: playersArray.map(p => ({ id: p.id, name: p.name, type: p.type || 'human' })),
-      npcCount: npcCount,
+      npcCount: parsedNpcCount,
       totalRooms: rooms.size,
       activeRooms: Array.from(rooms.keys())
     });
@@ -966,8 +975,8 @@ io.on('connection', (socket) => {
     room.countdownValue = null;
     room.countdownInterval = null;
     
-    devLog.log(`${actualGameMode === 'solo' ? 'Solo' : 'Single-player'} game started in room ${roomCode}${actualGameMode === 'single-player' ? ` with ${npcCount} NPCs` : ''}`);
-    console.log(`${actualGameMode === 'solo' ? 'Solo' : 'Single-player'} game started in room ${roomCode}${actualGameMode === 'single-player' ? ` with ${npcCount} NPCs` : ''}`);
+    devLog.log(`${actualGameMode === 'solo' ? 'Solo' : 'Single-player'} game started in room ${roomCode}${actualGameMode === 'single-player' ? ` with ${parsedNpcCount} NPCs` : ''}`);
+    console.log(`${actualGameMode === 'solo' ? 'Solo' : 'Single-player'} game started in room ${roomCode}${actualGameMode === 'single-player' ? ` with ${parsedNpcCount} NPCs` : ''}`);
   });
 
   // Helper function to start countdown for a room

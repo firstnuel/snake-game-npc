@@ -1,12 +1,90 @@
 // Basic NPC AI for single-player mode
 const { GRID_WIDTH, GRID_HEIGHT } = require('./gameLogic');
 
-function createNPC(playerId, name, difficulty = 'medium') {
+const NPC_PROFILES = {
+  balanced: {
+    label: 'Balanced',
+    description: 'Focuses on food while staying reasonably safe.',
+    base: { reactionTime: 120, successRate: 0.8, lookAhead: 4, aggression: 0.45, caution: 0.55 },
+    bias: { food: 0.6, hunt: 0.3, survival: 0.1 }
+  },
+  hunter: {
+    label: 'Hunter',
+    description: 'Pressures other snakes and looks for head-to-head wins.',
+    base: { reactionTime: 110, successRate: 0.78, lookAhead: 4, aggression: 0.75, caution: 0.45 },
+    bias: { food: 0.3, hunt: 0.6, survival: 0.1 }
+  },
+  survivor: {
+    label: 'Survivor',
+    description: 'Values space and avoids risky routes.',
+    base: { reactionTime: 130, successRate: 0.84, lookAhead: 5, aggression: 0.25, caution: 0.8 },
+    bias: { food: 0.45, hunt: 0.1, survival: 0.45 }
+  },
+  forager: {
+    label: 'Forager',
+    description: 'Prioritizes food and rapid growth.',
+    base: { reactionTime: 115, successRate: 0.76, lookAhead: 3, aggression: 0.35, caution: 0.5 },
+    bias: { food: 0.75, hunt: 0.15, survival: 0.1 }
+  }
+};
+
+const DIFFICULTY_MULTIPLIERS = {
+  easy: { reactionTime: 1.25, successRate: 0.85, lookAhead: 0.85, aggression: 0.9, caution: 1.05 },
+  medium: { reactionTime: 1, successRate: 1, lookAhead: 1, aggression: 1, caution: 1 },
+  hard: { reactionTime: 0.75, successRate: 1.15, lookAhead: 1.2, aggression: 1.1, caution: 0.95 }
+};
+
+const DEFAULT_TUNING = { speed: 3, skill: 3, boldness: 3 };
+
+function clampNumber(value, min, max) {
+  const num = Number(value);
+  if (Number.isNaN(num)) return min;
+  return Math.min(max, Math.max(min, num));
+}
+
+function mapRange(value, inMin, inMax, outMin, outMax) {
+  const clamped = clampNumber(value, inMin, inMax);
+  const ratio = (clamped - inMin) / (inMax - inMin);
+  return outMin + ratio * (outMax - outMin);
+}
+
+function sanitizeName(name, fallback) {
+  if (typeof name !== 'string') return fallback;
+  const trimmed = name.trim().slice(0, 20);
+  return trimmed.length ? trimmed : fallback;
+}
+
+function normalizeNPCConfig(config, fallbackName) {
+  const source = typeof config === 'string'
+    ? { difficulty: config }
+    : (config && typeof config === 'object' ? config : {});
+  const name = sanitizeName(source.name, fallbackName);
+  const profile = NPC_PROFILES[source.profile] ? source.profile : 'balanced';
+  const difficulty = DIFFICULTY_MULTIPLIERS[source.difficulty] ? source.difficulty : 'medium';
+  const tuningSource = source.tuning && typeof source.tuning === 'object' ? source.tuning : source;
+  const speed = clampNumber(tuningSource.speed ?? DEFAULT_TUNING.speed, 1, 5);
+  const skill = clampNumber(tuningSource.skill ?? DEFAULT_TUNING.skill, 1, 5);
+  const boldness = clampNumber(tuningSource.boldness ?? DEFAULT_TUNING.boldness, 1, 5);
+  return {
+    name,
+    profile,
+    difficulty,
+    tuning: { speed, skill, boldness }
+  };
+}
+
+function createNPC(playerId, name, config = {}) {
+  const normalizedConfig = typeof config === 'string'
+    ? normalizeNPCConfig({ difficulty: config }, name)
+    : normalizeNPCConfig({ ...config, name }, name);
+
   return {
     id: playerId,
-    name: name,
+    name: normalizedConfig.name,
     type: 'npc',
-    difficulty: difficulty,
+    difficulty: normalizedConfig.difficulty,
+    profile: normalizedConfig.profile,
+    tuning: normalizedConfig.tuning,
     targetFood: null,
     lastDirection: null,
     decisionDelay: 0
@@ -14,24 +92,157 @@ function createNPC(playerId, name, difficulty = 'medium') {
 }
 
 function getDifficultySettings(difficulty) {
-  const settings = {
-    easy: {
-      reactionTime: 200, // ms delay before making decisions (reduced for better survival)
-      successRate: 0.75, // 75% chance of making good decisions (increased)
-      lookAhead: 3 // steps ahead to plan (increased)
-    },
-    medium: {
-      reactionTime: 100, // Reduced reaction time
-      successRate: 0.85, // Increased success rate
-      lookAhead: 5 // Increased look ahead
-    },
-    hard: {
-      reactionTime: 30, // Faster reaction
-      successRate: 0.98, // Very high success rate
-      lookAhead: 7 // More look ahead steps
-    }
+  return DIFFICULTY_MULTIPLIERS[difficulty] || DIFFICULTY_MULTIPLIERS.medium;
+}
+
+function getNPCSettings(npc) {
+  const profile = NPC_PROFILES[npc.profile] || NPC_PROFILES.balanced;
+  const difficulty = getDifficultySettings(npc.difficulty);
+  const tuning = npc.tuning || DEFAULT_TUNING;
+
+  const speedMultiplier = mapRange(tuning.speed, 1, 5, 0.8, 1.2);
+  const skillMultiplier = mapRange(tuning.skill, 1, 5, 0.8, 1.2);
+  const boldnessMultiplier = mapRange(tuning.boldness, 1, 5, 0.7, 1.3);
+
+  const reactionTime = clampNumber((profile.base.reactionTime * difficulty.reactionTime) / speedMultiplier, 40, 260);
+  const successRate = clampNumber(profile.base.successRate * difficulty.successRate * skillMultiplier, 0.4, 0.99);
+  const lookAhead = Math.round(clampNumber(profile.base.lookAhead * difficulty.lookAhead * skillMultiplier, 2, 8));
+  const aggression = clampNumber(profile.base.aggression * difficulty.aggression * boldnessMultiplier, 0.1, 0.95);
+  const caution = clampNumber(profile.base.caution * difficulty.caution / boldnessMultiplier, 0.1, 0.95);
+
+  return {
+    profile,
+    reactionTime,
+    successRate,
+    lookAhead,
+    aggression,
+    caution,
+    randomness: clampNumber(1 - successRate, 0.05, 0.4)
   };
-  return settings[difficulty] || settings.medium;
+}
+
+function chooseTargetType(settings, hasFood, hasOpponent) {
+  const bias = settings.profile.bias || { food: 0.6, hunt: 0.3, survival: 0.1 };
+  const aggressionBoost = 0.6 + settings.aggression * 0.8;
+  const cautionBoost = 0.6 + settings.caution * 0.8;
+  const weights = {
+    food: bias.food * (1 + (1 - settings.aggression) * 0.3),
+    hunt: bias.hunt * aggressionBoost,
+    survival: bias.survival * cautionBoost
+  };
+
+  if (!hasFood) weights.food = 0;
+  if (!hasOpponent) weights.hunt = 0;
+
+  const total = weights.food + weights.hunt + weights.survival;
+  if (total <= 0) return hasFood ? 'food' : 'survival';
+
+  const roll = Math.random() * total;
+  if (roll < weights.food) return 'food';
+  if (roll < weights.food + weights.hunt) return 'hunt';
+  return 'survival';
+}
+
+function getCenterTarget() {
+  return { x: Math.floor(GRID_WIDTH / 2), y: Math.floor(GRID_HEIGHT / 2) };
+}
+
+function findBestFoodTarget(head, gameState, settings) {
+  let bestFood = null;
+  let bestScore = -Infinity;
+  const cautionBoost = 1 + settings.caution * 0.5;
+
+  gameState.food.forEach(food => {
+    const dx = food.x - head.x;
+    const dy = food.y - head.y;
+    const distance = Math.abs(dx) + Math.abs(dy);
+    let score = 1000 / (distance + 1);
+
+    if (gameState.wallMode) {
+      const foodWallDist = Math.min(
+        food.x,
+        GRID_WIDTH - 1 - food.x,
+        food.y,
+        GRID_HEIGHT - 1 - food.y
+      );
+      score += foodWallDist * 2 * cautionBoost;
+
+      const headWallDist = Math.min(
+        head.x,
+        GRID_WIDTH - 1 - head.x,
+        head.y,
+        GRID_HEIGHT - 1 - head.y
+      );
+
+      if (headWallDist < 3) {
+        const requiresWallHug = (head.x < 3 && food.x < 3) ||
+                               (head.x > GRID_WIDTH - 4 && food.x > GRID_WIDTH - 4) ||
+                               (head.y < 3 && food.y < 3) ||
+                               (head.y > GRID_HEIGHT - 4 && food.y > GRID_HEIGHT - 4);
+        if (requiresWallHug) {
+          score -= 50 * cautionBoost;
+        }
+      }
+    }
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestFood = food;
+    }
+  });
+
+  return bestFood;
+}
+
+function findBestOpponentTarget(head, gameState, playerId) {
+  let bestTarget = null;
+  let bestScore = -Infinity;
+
+  Object.values(gameState.players).forEach(otherPlayer => {
+    if (otherPlayer.id === playerId || !otherPlayer.isAlive || !otherPlayer.snake || otherPlayer.snake.length === 0) {
+      return;
+    }
+    const otherHead = otherPlayer.snake[0];
+    const distance = Math.abs(otherHead.x - head.x) + Math.abs(otherHead.y - head.y);
+    const score = 1000 / (distance + 1);
+    if (score > bestScore) {
+      bestScore = score;
+      bestTarget = otherHead;
+    }
+  });
+
+  return bestTarget;
+}
+
+function getDirectionToTarget(head, target, currentDir, wallMode) {
+  if (!target) return null;
+  const dx = target.x - head.x;
+  const dy = target.y - head.y;
+
+  let wrappedDx = dx;
+  let wrappedDy = dy;
+  if (!wallMode) {
+    wrappedDx = dx > GRID_WIDTH / 2 ? dx - GRID_WIDTH : (dx < -GRID_WIDTH / 2 ? dx + GRID_WIDTH : dx);
+    wrappedDy = dy > GRID_HEIGHT / 2 ? dy - GRID_HEIGHT : (dy < -GRID_HEIGHT / 2 ? dy + GRID_HEIGHT : dy);
+  }
+
+  let targetDir = null;
+  if (Math.abs(wrappedDx) > Math.abs(wrappedDy)) {
+    targetDir = wrappedDx > 0 ? 'right' : 'left';
+  } else {
+    targetDir = wrappedDy > 0 ? 'down' : 'up';
+  }
+
+  const opposites = { up: 'down', down: 'up', left: 'right', right: 'left' };
+  if (targetDir === opposites[currentDir]) {
+    if (currentDir === 'up' || currentDir === 'down') {
+      targetDir = wrappedDx > 0 ? 'right' : 'left';
+    } else {
+      targetDir = wrappedDy > 0 ? 'down' : 'up';
+    }
+  }
+
+  return targetDir;
 }
 
 function decideNPCMove(npc, gameState, player) {
@@ -39,7 +250,7 @@ function decideNPCMove(npc, gameState, player) {
     return null;
   }
 
-  const settings = getDifficultySettings(npc.difficulty);
+  const settings = getNPCSettings(npc);
   
   // Get head position early (needed for wall mode checks)
   const head = player.snake[0];
@@ -55,113 +266,33 @@ function decideNPCMove(npc, gameState, player) {
   // Sometimes make mistakes (based on success rate) - but still use smart avoidance
   if (Math.random() > settings.successRate) {
     // Even when making mistakes, use collision avoidance to survive longer
-    return avoidCollisions(player, gameState, currentDir);
+    return avoidCollisions(player, gameState, currentDir, settings);
   }
 
-  // Find nearest food with pathfinding consideration
-  let bestFood = null;
-  let bestScore = -Infinity;
+  const foodTarget = findBestFoodTarget(head, gameState, settings);
+  const opponentTarget = findBestOpponentTarget(head, gameState, player.id);
+  const targetType = chooseTargetType(settings, !!foodTarget, !!opponentTarget);
 
-  gameState.food.forEach(food => {
-    const dx = food.x - head.x;
-    const dy = food.y - head.y;
-    const distance = Math.abs(dx) + Math.abs(dy); // Manhattan distance
-    
-    // In wall mode, prefer food that's not near walls (safer to reach)
-    let score = 1000 / (distance + 1); // Base score (closer = better)
-    
-    if (gameState.wallMode) {
-      // Bonus for food that's away from walls
-      const foodWallDist = Math.min(
-        food.x, 
-        GRID_WIDTH - 1 - food.x,
-        food.y,
-        GRID_HEIGHT - 1 - food.y
-      );
-      score += foodWallDist * 2;
-      
-      // Penalty if we're near a wall and food is on the other side
-      const headWallDist = Math.min(
-        head.x,
-        GRID_WIDTH - 1 - head.x,
-        head.y,
-        GRID_HEIGHT - 1 - head.y
-      );
-      
-      if (headWallDist < 3) {
-        // We're near a wall, check if food requires going along the wall
-        const requiresWallHug = (head.x < 3 && food.x < 3) || 
-                               (head.x > GRID_WIDTH - 4 && food.x > GRID_WIDTH - 4) ||
-                               (head.y < 3 && food.y < 3) ||
-                               (head.y > GRID_HEIGHT - 4 && food.y > GRID_HEIGHT - 4);
-        if (requiresWallHug) {
-          score -= 50; // Prefer food that doesn't require wall hugging
-        }
-      }
-    }
-    
-    if (score > bestScore) {
-      bestScore = score;
-      bestFood = food;
-    }
-  });
-
-  // If no food, move to stay safe and avoid walls
-  if (!bestFood) {
-    // In wall mode, prefer moving toward center
-    if (gameState.wallMode) {
-      const centerX = GRID_WIDTH / 2;
-      const centerY = GRID_HEIGHT / 2;
-      const dx = centerX - head.x;
-      const dy = centerY - head.y;
-      
-      let targetDir = null;
-      if (Math.abs(dx) > Math.abs(dy)) {
-        targetDir = dx > 0 ? 'right' : 'left';
-      } else {
-        targetDir = dy > 0 ? 'down' : 'up';
-      }
-      
-      return avoidCollisions(player, gameState, targetDir);
-    }
-    
-    return avoidCollisions(player, gameState, currentDir);
+  let target = null;
+  if (targetType === 'hunt' && opponentTarget) {
+    target = opponentTarget;
+  } else if (targetType === 'food' && foodTarget) {
+    target = foodTarget;
+  } else if (targetType === 'survival') {
+    target = getCenterTarget();
   }
 
-  // Calculate direction to food with smarter pathfinding
-  let targetDir = null;
-  const dx = bestFood.x - head.x;
-  const dy = bestFood.y - head.y;
-
-  // Handle wrapping only if wall mode is disabled
-  let wrappedDx = dx;
-  let wrappedDy = dy;
-  if (!gameState.wallMode) {
-    wrappedDx = dx > GRID_WIDTH / 2 ? dx - GRID_WIDTH : (dx < -GRID_WIDTH / 2 ? dx + GRID_WIDTH : dx);
-    wrappedDy = dy > GRID_HEIGHT / 2 ? dy - GRID_HEIGHT : (dy < -GRID_HEIGHT / 2 ? dy + GRID_HEIGHT : dy);
+  if (!target) {
+    target = foodTarget || getCenterTarget();
   }
 
-  // Choose primary direction
-  if (Math.abs(wrappedDx) > Math.abs(wrappedDy)) {
-    targetDir = wrappedDx > 0 ? 'right' : 'left';
-  } else {
-    targetDir = wrappedDy > 0 ? 'down' : 'up';
+  const preferredDir = getDirectionToTarget(head, target, currentDir, gameState.wallMode);
+  if (!preferredDir) {
+    return avoidCollisions(player, gameState, currentDir, settings);
   }
 
-  // Prevent reversing direction
-  const opposites = { 'up': 'down', 'down': 'up', 'left': 'right', 'right': 'left' };
-  if (targetDir === opposites[currentDir]) {
-    // Choose perpendicular direction that's safer
-    if (currentDir === 'up' || currentDir === 'down') {
-      targetDir = wrappedDx > 0 ? 'right' : 'left';
-    } else {
-      targetDir = wrappedDy > 0 ? 'down' : 'up';
-    }
-  }
-
-  // Use improved collision avoidance which considers pathfinding
-  const safeDir = avoidCollisions(player, gameState, targetDir);
-  return safeDir || targetDir;
+  const safeDir = avoidCollisions(player, gameState, preferredDir, settings);
+  return safeDir || preferredDir;
 }
 
 // Check if a position is safe (not occupied by snake body)
@@ -283,10 +414,13 @@ function wouldLeadToDeadEnd(head, dir, gameState, player, lookAhead = 2) {
   return false;
 }
 
-function avoidCollisions(player, gameState, preferredDir) {
+function avoidCollisions(player, gameState, preferredDir, settings = null) {
   const head = player.snake[0];
   const directions = ['up', 'down', 'left', 'right'];
   const opposites = { 'up': 'down', 'down': 'up', 'left': 'right', 'right': 'left' };
+  const cautionFactor = settings ? 0.5 + settings.caution : 1;
+  const lookAhead = settings ? settings.lookAhead : 3;
+  const randomness = settings ? settings.randomness : 0;
   
   // Predict where other snakes will be
   const otherSnakePredictions = predictOtherSnakePositions(gameState, player.id);
@@ -379,16 +513,16 @@ function avoidCollisions(player, gameState, preferredDir) {
     // In wall mode, prefer directions that keep us away from walls
     if (gameState.wallMode) {
       const wallDist = distanceToWall(newHead, dir, true);
-      score += wallDist * 3; // Strongly prefer being further from walls
+      score += wallDist * (2 + 3 * cautionFactor);
       
       // Heavy penalty for being too close to walls (within 2 cells)
       if (wallDist < 2) {
-        score -= 50; // Avoid getting too close to walls
+        score -= 30 * cautionFactor;
       }
       
       // Penalize directions that lead to dead ends
-      if (wouldLeadToDeadEnd(newHead, dir, gameState, player, 3)) {
-        score -= 150; // Very heavy penalty for dead ends
+      if (wouldLeadToDeadEnd(newHead, dir, gameState, player, Math.max(2, Math.min(lookAhead, 8)))) {
+        score -= 120 * cautionFactor;
       }
     }
     
@@ -416,7 +550,7 @@ function avoidCollisions(player, gameState, preferredDir) {
       return isPositionSafe(testPos, gameState, player.id);
     });
     
-    score += futureDirs.length * 10; // Prefer directions with more options
+    score += futureDirs.length * (8 + 8 * cautionFactor);
     
     dirScores.push({ dir, score });
   }
@@ -424,9 +558,18 @@ function avoidCollisions(player, gameState, preferredDir) {
   // Sort by score (highest first)
   dirScores.sort((a, b) => b.score - a.score);
   
-  // Return best direction, or preferred if no good options
-  if (dirScores.length > 0 && dirScores[0].score > 0) {
-    return dirScores[0].dir;
+  // Return best direction, with some randomness to avoid loops
+  if (dirScores.length > 0) {
+    if (randomness > 0 && dirScores.length > 1) {
+      const topScore = dirScores[0].score;
+      const viable = dirScores.filter(item => item.score >= topScore - 25);
+      if (viable.length > 1 && Math.random() < randomness) {
+        return viable[Math.floor(Math.random() * viable.length)].dir;
+      }
+    }
+    if (dirScores[0].score > 0) {
+      return dirScores[0].dir;
+    }
   }
   
   // Fallback: try preferred direction even if risky
@@ -459,6 +602,6 @@ function processNPCInputs(gameState, npcs) {
 module.exports = {
   createNPC,
   processNPCInputs,
-  getDifficultySettings
+  getDifficultySettings,
+  normalizeNPCConfig
 };
-
