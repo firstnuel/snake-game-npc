@@ -400,6 +400,117 @@ body {
   border-color: #667eea;
 }
 
+.npc-customization-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.npc-card {
+  border: 1px solid #e3e7ff;
+  background: #f9fafe;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.npc-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.npc-title {
+  font-weight: 600;
+  color: #333;
+  font-size: 0.95em;
+}
+
+.npc-effectiveness {
+  font-size: 0.8em;
+  color: #445;
+  background: #eef1ff;
+  border: 1px solid #dfe3ff;
+  border-radius: 999px;
+  padding: 3px 8px;
+  white-space: nowrap;
+}
+
+.npc-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.npc-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.85em;
+  color: #555;
+}
+
+.npc-field span {
+  font-weight: 600;
+}
+
+.npc-field input,
+.npc-field select {
+  width: 100%;
+  padding: 8px;
+  border: 2px solid #e0e0e0;
+  border-radius: 5px;
+  font-size: 0.9em;
+  background: white;
+}
+
+.npc-field input:focus,
+.npc-field select:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.npc-slider {
+  gap: 4px;
+}
+
+.npc-slider input[type="range"] {
+  width: 100%;
+}
+
+.npc-slider-value {
+  text-align: right;
+  font-size: 0.8em;
+  color: #666;
+}
+
+.npc-stats,
+.npc-profile-desc {
+  margin-top: 8px;
+  font-size: 0.8em;
+  color: #555;
+}
+
+.npc-stats {
+  background: #fff;
+  border: 1px dashed #e0e0e0;
+  border-radius: 6px;
+  padding: 8px;
+}
+
+.npc-customization-note {
+  margin-top: 8px;
+  font-size: 0.8em;
+  color: #666;
+}
+
+@media (max-width: 520px) {
+  .npc-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .btn-primary, .btn-secondary {
   padding: 8.5px 17px;
   border: none;

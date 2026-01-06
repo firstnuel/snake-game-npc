@@ -24,10 +24,6 @@
                         <input type="radio" name="gameMode" value="single-player" checked>
                         <span>Single-Player (vs NPCs)</span>
                     </label>
-                    <label class="mode-option">
-                        <input type="radio" name="gameMode" value="solo">
-                        <span>Solo (No NPCs)</span>
-                    </label>
                 </div>
             </div>
 
@@ -67,10 +63,18 @@
             <div class="form-group" id="singlePlayerFields2" style="display: none;">
                 <label for="npcCount">Number of NPCs:</label>
                 <select id="npcCount">
-                    <option value="1">1 NPC (Easy)</option>
-                    <option value="2" selected>2 NPCs (Medium)</option>
-                    <option value="3">3 NPCs (Hard)</option>
+                    <option value="1">1 NPC</option>
+                    <option value="2" selected>2 NPCs</option>
+                    <option value="3">3 NPCs</option>
                 </select>
+            </div>
+
+            <div class="form-group" id="npcCustomizationSection" style="display: none;">
+                <label>NPC Customization</label>
+                <div id="npcCustomizationList" class="npc-customization-list"></div>
+                <div class="npc-customization-note">
+                    Difficulty multiplies each NPC's speed, skill, and boldness settings.
+                </div>
             </div>
 
             <div class="form-group" id="singlePlayerGameOptions" style="display: none; margin-top: 15px; padding: 15px; background: #f5f5f5; border-radius: 8px;">

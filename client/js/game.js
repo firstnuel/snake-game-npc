@@ -1637,8 +1637,9 @@ function playAgainSinglePlayer() {
       window.devLog.log('Retrieved game data from localStorage:', gameData);
     }
     
+    const npcCount = Number(gameData.npcCount);
     // Validate game data
-    if (!gameData.playerName || !gameData.npcCount) {
+    if (!gameData.playerName || !Number.isFinite(npcCount) || npcCount < 1) {
       const errorMsg = 'Invalid game data: missing playerName or npcCount';
       console.error(errorMsg, gameData);
       if (typeof window !== 'undefined' && window.devLog) {
@@ -1722,10 +1723,11 @@ function restartGameWithData(socketToUse, gameData) {
   // Prepare game data for server (remove timestamp if present)
   const dataToSend = {
     playerName: gameData.playerName,
-    npcCount: gameData.npcCount,
+    npcCount: npcCount,
     controlScheme: gameData.controlScheme || 'wasd',
     playerToken: gameData.playerToken || (typeof getOrCreatePlayerToken === 'function' ? getOrCreatePlayerToken() : null),
-    gameOptions: gameData.gameOptions || { wallMode: false }
+    gameOptions: gameData.gameOptions || { wallMode: false },
+    npcConfigs: Array.isArray(gameData.npcConfigs) ? gameData.npcConfigs : undefined
   };
   
   if (typeof window !== 'undefined' && window.devLog) {

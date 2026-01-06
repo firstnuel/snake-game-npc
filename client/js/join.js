@@ -23,6 +23,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const singlePlayerFields = document.getElementById('singlePlayerFields');
   const singlePlayerFields2 = document.getElementById('singlePlayerFields2');
   const singlePlayerGameOptions = document.getElementById('singlePlayerGameOptions');
+  const npcCustomizationSection = document.getElementById('npcCustomizationSection');
+  const npcCustomizationList = document.getElementById('npcCustomizationList');
   const controlSchemeRadios = document.querySelectorAll('input[name="controlScheme"]');
   const publicRoomsSection = document.getElementById('publicRoomsSection');
   const publicRoomsList = document.getElementById('publicRoomsList');
@@ -36,9 +38,276 @@ document.addEventListener('DOMContentLoaded', () => {
     roomCodeInput: !!roomCodeInput,
     singlePlayerNameInput: !!singlePlayerNameInput,
     npcCountSelect: !!npcCountSelect,
+    npcCustomizationList: !!npcCustomizationList,
     gameModeRadios: gameModeRadios.length,
     socket: typeof socket !== 'undefined' ? !!socket : 'undefined'
   });
+
+  const npcNameDefaults = ['Bot-Alpha', 'Bot-Beta', 'Bot-Gamma'];
+  const npcProfiles = {
+    balanced: {
+      label: 'Balanced',
+      description: 'Focuses on food while staying reasonably safe.',
+      base: { reactionTime: 120, successRate: 0.8, lookAhead: 4, aggression: 0.45, caution: 0.55 },
+      bias: { food: 0.6, hunt: 0.3, survival: 0.1 }
+    },
+    hunter: {
+      label: 'Hunter',
+      description: 'Pressures other snakes and looks for head-to-head wins.',
+      base: { reactionTime: 110, successRate: 0.78, lookAhead: 4, aggression: 0.75, caution: 0.45 },
+      bias: { food: 0.3, hunt: 0.6, survival: 0.1 }
+    },
+    survivor: {
+      label: 'Survivor',
+      description: 'Values space and avoids risky routes.',
+      base: { reactionTime: 130, successRate: 0.84, lookAhead: 5, aggression: 0.25, caution: 0.8 },
+      bias: { food: 0.45, hunt: 0.1, survival: 0.45 }
+    },
+    forager: {
+      label: 'Forager',
+      description: 'Prioritizes food and rapid growth.',
+      base: { reactionTime: 115, successRate: 0.76, lookAhead: 3, aggression: 0.35, caution: 0.5 },
+      bias: { food: 0.75, hunt: 0.15, survival: 0.1 }
+    }
+  };
+  const difficultyMultipliers = {
+    easy: { reactionTime: 1.25, successRate: 0.85, lookAhead: 0.85, aggression: 0.9, caution: 1.05 },
+    medium: { reactionTime: 1, successRate: 1, lookAhead: 1, aggression: 1, caution: 1 },
+    hard: { reactionTime: 0.75, successRate: 1.15, lookAhead: 1.2, aggression: 1.1, caution: 0.95 }
+  };
+
+  function clampNumber(value, min, max) {
+    const num = Number(value);
+    if (Number.isNaN(num)) return min;
+    return Math.min(max, Math.max(min, num));
+  }
+
+  function mapRange(value, inMin, inMax, outMin, outMax) {
+    const clamped = clampNumber(value, inMin, inMax);
+    const ratio = (clamped - inMin) / (inMax - inMin);
+    return outMin + ratio * (outMax - outMin);
+  }
+
+  function escapeHtml(value) {
+    return String(value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function getDefaultNpcConfig(index, npcCount) {
+    const profileKeys = Object.keys(npcProfiles);
+    const profile = profileKeys[index % profileKeys.length] || 'balanced';
+    const name = npcNameDefaults[index] || `Bot-${index + 1}`;
+    let difficulty = 'medium';
+    if (npcCount === 2) {
+      difficulty = index === 0 ? 'easy' : 'medium';
+    } else if (npcCount >= 3) {
+      difficulty = ['easy', 'medium', 'hard'][index] || 'medium';
+    }
+    return {
+      name,
+      profile,
+      difficulty,
+      speed: 3,
+      skill: 3,
+      boldness: 3
+    };
+  }
+
+  function calculateNpcStats(config) {
+    const profileKey = npcProfiles[config.profile] ? config.profile : 'balanced';
+    const profile = npcProfiles[profileKey];
+    const difficulty = difficultyMultipliers[config.difficulty] || difficultyMultipliers.medium;
+
+    const speed = clampNumber(config.speed, 1, 5);
+    const skill = clampNumber(config.skill, 1, 5);
+    const boldness = clampNumber(config.boldness, 1, 5);
+
+    const speedMultiplier = mapRange(speed, 1, 5, 0.8, 1.2);
+    const skillMultiplier = mapRange(skill, 1, 5, 0.8, 1.2);
+    const boldnessMultiplier = mapRange(boldness, 1, 5, 0.7, 1.3);
+
+    const reactionTime = clampNumber((profile.base.reactionTime * difficulty.reactionTime) / speedMultiplier, 40, 260);
+    const successRate = clampNumber(profile.base.successRate * difficulty.successRate * skillMultiplier, 0.4, 0.99);
+    const lookAhead = Math.round(clampNumber(profile.base.lookAhead * difficulty.lookAhead * skillMultiplier, 2, 8));
+    const aggression = clampNumber(profile.base.aggression * difficulty.aggression * boldnessMultiplier, 0.1, 0.95);
+    const caution = clampNumber(profile.base.caution * difficulty.caution / boldnessMultiplier, 0.1, 0.95);
+
+    const speedScore = clampNumber((220 - reactionTime) / 160, 0, 1);
+    const lookAheadScore = clampNumber((lookAhead - 2) / 6, 0, 1);
+    const effectiveness = Math.round((speedScore * 0.35 + successRate * 0.45 + lookAheadScore * 0.2) * 100);
+
+    return {
+      profile,
+      reactionTime: Math.round(reactionTime),
+      successRate,
+      lookAhead,
+      aggression,
+      caution,
+      effectiveness
+    };
+  }
+
+  function formatEffectiveness(score) {
+    if (score >= 86) return 'Extreme';
+    if (score >= 66) return 'High';
+    if (score >= 41) return 'Medium';
+    return 'Low';
+  }
+
+  function updateNpcCardDisplay(card) {
+    const nameInput = card.querySelector('.npc-name');
+    const profileSelect = card.querySelector('.npc-profile');
+    const difficultySelect = card.querySelector('.npc-difficulty');
+    const speedInput = card.querySelector('.npc-speed');
+    const skillInput = card.querySelector('.npc-skill');
+    const boldnessInput = card.querySelector('.npc-boldness');
+    if (!profileSelect || !difficultySelect || !speedInput || !skillInput || !boldnessInput) return;
+
+    const config = {
+      name: nameInput ? nameInput.value : '',
+      profile: profileSelect.value,
+      difficulty: difficultySelect.value,
+      speed: speedInput.value,
+      skill: skillInput.value,
+      boldness: boldnessInput.value
+    };
+
+    const stats = calculateNpcStats(config);
+    const effectivenessLabel = formatEffectiveness(stats.effectiveness);
+
+    const effectivenessEl = card.querySelector('[data-effectiveness]');
+    if (effectivenessEl) {
+      effectivenessEl.textContent = `Effectiveness: ${stats.effectiveness} (${effectivenessLabel})`;
+    }
+
+    const profileDescEl = card.querySelector('[data-profile-desc]');
+    if (profileDescEl) {
+      profileDescEl.textContent = stats.profile.description;
+    }
+
+    const statsEl = card.querySelector('[data-npc-stats]');
+    if (statsEl) {
+      statsEl.textContent = `Reaction: ${stats.reactionTime}ms | Success: ${Math.round(stats.successRate * 100)}% | Look-ahead: ${stats.lookAhead}`;
+    }
+
+    const speedValue = card.querySelector('[data-speed-value]');
+    if (speedValue) speedValue.textContent = String(speedInput.value);
+    const skillValue = card.querySelector('[data-skill-value]');
+    if (skillValue) skillValue.textContent = String(skillInput.value);
+    const boldnessValue = card.querySelector('[data-boldness-value]');
+    if (boldnessValue) boldnessValue.textContent = String(boldnessInput.value);
+  }
+
+  function getNpcConfigsFromUI(expectedCount = null) {
+    const configs = [];
+    if (npcCustomizationList) {
+      const cards = npcCustomizationList.querySelectorAll('.npc-card');
+      cards.forEach((card) => {
+        const nameInput = card.querySelector('.npc-name');
+        const profileSelect = card.querySelector('.npc-profile');
+        const difficultySelect = card.querySelector('.npc-difficulty');
+        const speedInput = card.querySelector('.npc-speed');
+        const skillInput = card.querySelector('.npc-skill');
+        const boldnessInput = card.querySelector('.npc-boldness');
+        if (!profileSelect || !difficultySelect || !speedInput || !skillInput || !boldnessInput) return;
+        configs.push({
+          name: nameInput ? nameInput.value.trim() : '',
+          profile: profileSelect.value,
+          difficulty: difficultySelect.value,
+          speed: Number(speedInput.value),
+          skill: Number(skillInput.value),
+          boldness: Number(boldnessInput.value)
+        });
+      });
+    }
+
+    if (typeof expectedCount === 'number') {
+      const count = Math.max(1, Math.min(3, expectedCount));
+      for (let i = 0; i < count; i += 1) {
+        if (!configs[i]) {
+          configs[i] = getDefaultNpcConfig(i, count);
+        }
+      }
+      return configs.slice(0, count);
+    }
+
+    return configs;
+  }
+
+  function renderNpcCustomization(npcCount) {
+    if (!npcCustomizationList) return;
+    const count = Math.max(1, Math.min(3, npcCount));
+    const existingConfigs = getNpcConfigsFromUI();
+    npcCustomizationList.innerHTML = '';
+
+    const profileOptions = Object.entries(npcProfiles)
+      .map(([key, profile]) => `<option value="${key}">${profile.label}</option>`)
+      .join('');
+    const difficultyOptions = Object.keys(difficultyMultipliers)
+      .map((key) => `<option value="${key}">${key.charAt(0).toUpperCase() + key.slice(1)}</option>`)
+      .join('');
+
+    for (let i = 0; i < count; i += 1) {
+      const config = existingConfigs[i] || getDefaultNpcConfig(i, count);
+      const card = document.createElement('div');
+      card.className = 'npc-card';
+      card.dataset.npcIndex = String(i);
+      card.innerHTML = `
+        <div class="npc-card-header">
+          <div class="npc-title">NPC ${i + 1}</div>
+          <div class="npc-effectiveness" data-effectiveness></div>
+        </div>
+        <div class="npc-grid">
+          <label class="npc-field">
+            <span>Name</span>
+            <input type="text" class="npc-name" value="${escapeHtml(config.name)}" maxlength="20">
+          </label>
+          <label class="npc-field">
+            <span>Strategy</span>
+            <select class="npc-profile">${profileOptions}</select>
+          </label>
+          <label class="npc-field">
+            <span>Difficulty</span>
+            <select class="npc-difficulty">${difficultyOptions}</select>
+          </label>
+          <label class="npc-field npc-slider">
+            <span>Speed</span>
+            <input type="range" class="npc-speed" min="1" max="5" value="${config.speed}">
+            <div class="npc-slider-value" data-speed-value></div>
+          </label>
+          <label class="npc-field npc-slider">
+            <span>Skill</span>
+            <input type="range" class="npc-skill" min="1" max="5" value="${config.skill}">
+            <div class="npc-slider-value" data-skill-value></div>
+          </label>
+          <label class="npc-field npc-slider">
+            <span>Boldness</span>
+            <input type="range" class="npc-boldness" min="1" max="5" value="${config.boldness}">
+            <div class="npc-slider-value" data-boldness-value></div>
+          </label>
+        </div>
+        <div class="npc-profile-desc" data-profile-desc></div>
+        <div class="npc-stats" data-npc-stats></div>
+      `;
+
+      npcCustomizationList.appendChild(card);
+      const profileSelect = card.querySelector('.npc-profile');
+      const difficultySelect = card.querySelector('.npc-difficulty');
+      if (profileSelect) profileSelect.value = config.profile;
+      if (difficultySelect) difficultySelect.value = config.difficulty;
+      updateNpcCardDisplay(card);
+    }
+  }
+
+  function handleNpcCustomizationInput(event) {
+    const card = event.target.closest('.npc-card');
+    if (!card) return;
+    updateNpcCardDisplay(card);
+  }
 
   function updateModeUI(selectedMode) {
     if (selectedMode === 'single-player') {
@@ -46,20 +315,18 @@ document.addEventListener('DOMContentLoaded', () => {
       multiPlayerFields2.style.display = 'none';
       singlePlayerFields.style.display = 'block';
       singlePlayerFields2.style.display = 'block';
+      if (npcCustomizationSection) npcCustomizationSection.style.display = 'block';
       if (singlePlayerGameOptions) singlePlayerGameOptions.style.display = 'block';
       joinButton.textContent = 'Start Single-Player Game';
-    } else if (selectedMode === 'solo') {
-      multiPlayerFields.style.display = 'none';
-      multiPlayerFields2.style.display = 'none';
-      singlePlayerFields.style.display = 'block';
-      singlePlayerFields2.style.display = 'none'; // Hide NPC count selector for solo
-      if (singlePlayerGameOptions) singlePlayerGameOptions.style.display = 'block';
-      joinButton.textContent = 'Start Solo Game';
+      if (npcCountSelect) {
+        renderNpcCustomization(parseInt(npcCountSelect.value || '2', 10));
+      }
     } else {
       multiPlayerFields.style.display = 'block';
       multiPlayerFields2.style.display = 'block';
       singlePlayerFields.style.display = 'none';
       singlePlayerFields2.style.display = 'none';
+      if (npcCustomizationSection) npcCustomizationSection.style.display = 'none';
       if (singlePlayerGameOptions) singlePlayerGameOptions.style.display = 'none';
       joinButton.textContent = 'Join Room';
     }
@@ -76,6 +343,20 @@ document.addEventListener('DOMContentLoaded', () => {
   const defaultModeRadio = document.querySelector('input[name="gameMode"]:checked');
   const defaultMode = defaultModeRadio ? defaultModeRadio.value : 'single-player';
   updateModeUI(defaultMode);
+
+  if (npcCountSelect) {
+    npcCountSelect.addEventListener('change', () => {
+      const selectedMode = document.querySelector('input[name="gameMode"]:checked')?.value;
+      if (selectedMode === 'single-player') {
+        renderNpcCustomization(parseInt(npcCountSelect.value || '2', 10));
+      }
+    });
+  }
+
+  if (npcCustomizationList) {
+    npcCustomizationList.addEventListener('input', handleNpcCustomizationInput);
+    npcCustomizationList.addEventListener('change', handleNpcCustomizationInput);
+  }
 
   function setPublicToggleVisibility(show) {
     if (!publicToggleWrapper) return;
@@ -139,16 +420,16 @@ document.addEventListener('DOMContentLoaded', () => {
       const selectedMode = selectedModeRadio.value;
       console.log('Selected mode:', selectedMode);
       
-      if (selectedMode === 'single-player' || selectedMode === 'solo') {
-        console.log('Starting single-player/solo mode');
-        // Single-player or solo mode
+      if (selectedMode === 'single-player') {
+        console.log('Starting single-player mode');
         const playerName = (singlePlayerNameInput?.value.trim() || 'Player');
-        const npcCount = selectedMode === 'solo' ? 0 : parseInt(npcCountSelect?.value || '2');
+        const npcCount = Math.max(1, Math.min(3, parseInt(npcCountSelect?.value || '2', 10)));
+        const npcConfigs = getNpcConfigsFromUI(npcCount);
         const playerToken = typeof getOrCreatePlayerToken === 'function'
           ? getOrCreatePlayerToken()
           : null;
         
-        console.log('Single-player/solo params:', { playerName, npcCount, selectedMode, socketExists: !!socket });
+        console.log('Single-player params:', { playerName, npcCount, socketExists: !!socket });
         
         if (!socket) {
           console.error('Socket not initialized!');
@@ -162,6 +443,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 socket.emit('startSinglePlayer', {
                   playerName,
                   npcCount,
+                  npcConfigs,
                   playerToken
                 });
               } else {
@@ -179,35 +461,36 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (joinButton) {
           joinButton.disabled = true;
-          joinButton.textContent = selectedMode === 'solo' ? 'Starting Solo Game...' : 'Starting...';
+          joinButton.textContent = 'Starting Single-Player Game...';
         }
         // Get selected control scheme
         const selectedControlScheme = document.querySelector('input[name="controlScheme"]:checked');
         const controlScheme = selectedControlScheme ? selectedControlScheme.value : 'wasd';
         
-        // Get game options for single-player/solo (only wall mode)
+        // Get game options for single-player (only wall mode)
         const wallModeToggle = document.getElementById('singlePlayerWallModeToggle');
         const wallMode = wallModeToggle ? wallModeToggle.checked : false;
         
-        console.log('Emitting startSinglePlayer event with options:', { playerName, npcCount, selectedMode, controlScheme, wallMode });
+        console.log('Emitting startSinglePlayer event with options:', { playerName, npcCount, controlScheme, wallMode });
         
         // Store game initialization data for "Play Again" functionality (use localStorage for persistence)
         const gameInitData = {
           playerName,
           npcCount,
-          gameMode: selectedMode, // Include gameMode to distinguish solo vs single-player
+          gameMode: 'single-player',
           controlScheme,
           playerToken,
+          npcConfigs,
           gameOptions: {
             wallMode
           },
-          timestamp: Date.now() // Add timestamp for debugging
+          timestamp: Date.now()
         };
         localStorage.setItem('singlePlayerGameData', JSON.stringify(gameInitData));
         
         // Also log in dev mode
         if (typeof window !== 'undefined' && window.devLog) {
-          window.devLog.log('Stored single-player/solo game data:', gameInitData);
+          window.devLog.log('Stored single-player game data:', gameInitData);
         }
         
         socket.emit('startSinglePlayer', gameInitData);
